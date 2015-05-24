@@ -1,0 +1,159 @@
+---
+title: "Miles per gallon analysis"
+author: "Gissur Jónasson"
+date: "Saturday, May 23, 2015"
+output: pdf_document
+geometry: margin=2cm
+fontsize: 9pt
+---
+
+Exectuvive summary
+-------------
+This report tries to analyzi and explain the miles per gallon usages of cars based on their designs e.g. horsepower, weight, transmission etc. By analyzing the data it can clearly can be seen that mpg are mostly predicted by weight and horsepower of the cars but if we dig litle deeper it seems that automatic vs manual transmission does play a part although a vague one. By doing hypothesis testing both t test to compare mean between auto vs manual transmission and anova test to compare different predict models for mpg we end by saying that the manual transmission plays a part so by shifting gears yourself you can 2.083710 miles per gallon. 
+
+*Note that:* the statment is vague as the dataset is not big enough and to get more comfortable with the result I would conduct research on more cars as this dataset does have to much of a heavy automatic transmission cars relative to the manual cars that are lighter.
+[Github project directory can be found here](https://github.com/Gissi/Regression_models_cp1)
+
+Data processing and exploratory analysis
+------------------
+The data set in this project is a built in data set so we only need to do load it 
+
+```{r data_sum, echo=FALSE, messages = FALSE, eval=FALSE}
+mtcars <- mtcars
+str(mtcars)
+
+```
+
+The help file for the data set says (see apendix)
+
+It can be seen from summary of the data and from the help file that few of the variables are more like factor variables e.g. cyl, vs, am, gear, carb so I convert theses field to factors and have that dataset as well for back up when deciding on model. 
+
+```{r new_data_set, echo=FALSE}
+mtcars_clean <- mtcars
+mtcars_clean$am<- as.factor(mtcars_clean$am)
+mtcars_clean$vs<- as.factor(mtcars_clean$vs)
+mtcars_clean$cyl<- as.factor(mtcars_clean$cyl)
+mtcars_clean$gear<- as.factor(mtcars_clean$gear)
+mtcars_clean$carb<- as.factor(mtcars_clean$carb)
+```
+First off we start by analyzing the mpg variables with the respect to automatic vs manual transmission (see apendix)
+There are cleary differences in the mpg values on automatic vs manual. Is this difference significant lets make a t-test 
+
+```{r exploratory2, echo=TRUE}
+autoData <- mtcars[mtcars$am == 0,]
+manualData <- mtcars[mtcars$am == 1,]
+t_test <- t.test(autoData$mpg, manualData$mpg)
+t_test[[3]]
+```
+It can be seen by the p value that it is significan now lets look at the mpg based on other variables (see apendix)
+
+it looks from these pictures that the data is little skewed as with automatic transmission tend to be heavier and with more horse power in the data set there are though few data points that we can base on.
+
+Model building
+------------------
+lets now build or models - first off lets check to see what variables will be significant in the linear regression and correlation as well as variance inflation for the whole data set.
+
+```{r parameters for model check, echo=FALSE, message=FALSE, eval=TRUE}
+#install.packages("Hmisc")
+library("Hmisc")
+library("car")
+library("stargazer")
+```
+
+```{r parameters for model check2, echo=TRUE, message=FALSE, eval=TRUE}
+rcorr(as.matrix(mtcars))[[1]][1:4,1:6]
+fitall <- lm(mpg ~ ., data = mtcars)
+#summary(fitall)
+fitall_clean <- lm(mpg ~ ., data = mtcars_clean)
+#summary(fitall_clean)
+vif(fitall)[c(1,2,3,5,7,8,9)]
+
+```
+
+It can be seen by looking at beta coefficents for all variables, the correlation matrix as well as the variance inflation that **wt** and **hp** are the best variables for describing mpg which makes sense intuitively as cars get heavier and with more hoursepower they should have lower mpgs. 
+
+if we analyze the numbers above further it can be seen that **hp** is highly corralted with cyl and disp and we dont want collinearity so we dont consider adding these parameters to the model even though they could be good as seen above the variance inflation numbers also support that we will leave these parameters out. 
+
+but for the purpose of this project lets first chek how model based on **am** only comes out 
+
+```{r model building, echo=TRUE, message=FALSE}
+fit1 <- lm(mpg ~ am, data = mtcars_clean)
+#summary(fit1)
+```
+
+This model does not do that good of a job predciting **mpg** as it only has adjusted r-squared as 33,85% so this model does not fit the data that well but based on that we would conclude that manual transmission on average had 7,245 mpg then the automatic ones. 
+
+Lets make a model based on  **hp** and **wt** as we had found out they are pretty strong predictors. Model summary can be seen in the apendix. 
+
+```{r model building2, echo=TRUE, message=FALSE, comment= "#"}
+fit2 <- update(fit1,mpg ~ wt + hp , data = mtcars)
+#summary(fit2)
+fit3 <- update(fit1,mpg ~  wt + hp + am, data = mtcars)
+print(anova(fit1,fit2,fit3))
+```
+We conclude that the mpg is mainly based on **wt** and **hp** but the model gets litle bit better by adding  **am** as well so we use that as our final model and for the purpose of this project even thoug the anova test implies that the model with **am** is not significantly different from the one without it by the p value = 0.1413 
+
+Before we report the details of our model, it is important to check the residuals for any signs of non-normality and examine the residuals vs. fitted values plot to spot for any signs of heteroskedasticity. See appendix (residual analysis)
+
+Our residuals are normally distributed and homoskedastic. the **HP**, **wt**, **am** model explains *82,3%* of the mpg usages 
+
+mpg = 34.002875 - 0.037479 * hp - 2.878575 * wt + 2.083710 * am 
+
+so one might say that manual transmission cars on average have 2.083710 more miles then the automatic ones 
+
+Appendix
+------------------
+
+data explain:
+
+Category | Explanation
+------------- | -------------
+mpg|Miles/(US) gallon
+cyl|Number of cylinders
+disp|Displacement (cu.in.)
+hp|Gross horsepower
+drat|Rear axle ratio
+wt|Weight (lb/1000)
+qsec|1/4 mile time
+vs|V/S
+am|Transmission (0 = automatic, 1 = manual)
+gear|Number of forward gears
+carb|Number of carburetors
+
+auto vs manual:
+```{r exploratory, echo=FALSE, message=FALSE, warning=FALSE, fig.align='left'}
+attach(mtcars)
+am_mean <-aggregate(mtcars, by=list(am), 
+                    FUN=mean, na.rm=TRUE)
+am_std <-aggregate(mtcars, by=list(am), 
+                    FUN=sd, na.rm=TRUE)
+mtcars_clean$am<-factor(mtcars$am,levels=c(0,1), labels = c("Automatic","Manual"))
+boxplot(mpg~am, data = mtcars_clean,
+                col = c("blue", "red"),
+                main = "Difference in MPG by transmission",
+                xlab = "Transmission",
+                ylab = "Miles per Gallon"
+                )
+
+```
+
+model fitting table
+
+```{r exploratory5, echo=FALSE, message=FALSE, warning=FALSE}
+stargazer(fit1, fit2, fit3, title="Models fitting results", align=TRUE,type="text")
+```
+
+auto vs manual 2:
+```{r exploratory3, echo=FALSE, message=FALSE, warning=FALSE, fig.align='left'}
+par(mfrows = c(2,2))
+coplot(mpg ~ wt | as.factor(am), data = mtcars,
+     panel = panel.smooth, rows = 1)
+coplot(mpg ~ hp | as.factor(am), data = mtcars,
+      panel = panel.smooth, rows = 1)
+```
+residual analysis:
+```{r model residuals, echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow = c(2,2))
+plot(fit2)
+
+```
